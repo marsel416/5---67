@@ -1,0 +1,382 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>5Б-Банк</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: linear-gradient(135deg, #1a1a2e, #16213e);
+      min-height: 100vh;
+      color: #fff;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+    .container {
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(12px);
+      border-radius: 20px;
+      padding: 30px;
+      width: 100%;
+      max-width: 440px;
+      box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+    }
+    h1 {
+      text-align: center;
+      margin-bottom: 8px;
+      font-size: 28px;
+      background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .subtitle { text-align: center; opacity: 0.7; margin-bottom: 25px; font-size: 14px; }
+    input, select, button {
+      width: 100%;
+      padding: 14px;
+      margin: 8px 0;
+      border: none;
+      border-radius: 12px;
+      font-size: 16px;
+    }
+    input, select { background: rgba(255,255,255,0.12); color: #fff; }
+    input::placeholder { color: rgba(255,255,255,0.5); }
+    button {
+      background: linear-gradient(90deg, #00d2ff, #3a7bd5);
+      color: white;
+      font-weight: 600;
+    }
+    button.secondary { background: rgba(255,255,255,0.15); }
+    .card-info {
+      background: rgba(0,210,255,0.15);
+      border-radius: 16px;
+      padding: 20px;
+      margin: 20px 0;
+      text-align: center;
+    }
+    .balance { font-size: 36px; font-weight: 700; margin: 10px 0; }
+    .history { margin-top: 25px; max-height: 200px; overflow-y: auto; }
+    .history-item {
+      background: rgba(255,255,255,0.07);
+      padding: 12px;
+      border-radius: 10px;
+      margin-bottom: 8px;
+      font-size: 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .hidden { display: none !important; }
+    .admin-panel { margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.15); }
+    .error { color: #ff6b6b; text-align: center; margin: 10px 0; font-size: 14px; }
+    .success { color: #51cf66; text-align: center; margin: 10px 0; font-size: 14px; }
+    .section-title { margin: 18px 0 8px; font-size: 15px; opacity: 0.9; }
+    .small { font-size: 13px; opacity: 0.7; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Вход -->
+    <div id="login-screen">
+      <h1>5Б-Банк</h1>
+      <p class="subtitle">Введите свой 4-значный код</p>
+      <input type="text" id="code-input" placeholder="Код" maxlength="4" inputmode="numeric" autofocus>
+      <button id="login-btn">Войти</button>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+
+    <!-- Личный кабинет -->
+    <div id="user-screen" class="hidden">
+      <h1>Личный кабинет</h1>
+      <div class="card-info">
+        <div id="user-name" style="font-size:18px;margin-bottom:6px"></div>
+        <div class="balance" id="balance">0 ₽</div>
+        <div style="opacity:0.7;font-size:14px">Доступно</div>
+      </div>
+
+      <div class="section-title">Перевести деньги</div>
+      <select id="transfer-to">
+        <option value="">Выберите получателя</option>
+      </select>
+      <input type="number" id="transfer-amount" placeholder="Сумма (₽)" min="1">
+      <button id="transfer-btn">Перевести</button>
+      <p id="transfer-msg" class="hidden"></p>
+
+      <div class="history">
+        <h3 style="margin-bottom:12px">История операций</h3>
+        <div id="history-list"></div>
+      </div>
+      <button class="secondary" id="logout-user" style="margin-top:16px">Выйти</button>
+    </div>
+
+    <!-- Админ -->
+    <div id="admin-screen" class="hidden">
+      <h1>Админ-панель</h1>
+      <p class="subtitle">Начисление денег</p>
+
+      <select id="admin-card">
+        <option value="">Выберите карту</option>
+      </select>
+      <input type="number" id="admin-amount" placeholder="Сумма (₽)" min="1">
+      <input type="text" id="admin-comment" placeholder="Комментарий (необязательно)">
+      <button id="add-money-btn">Начислить</button>
+      <p id="admin-msg" class="hidden"></p>
+
+      <div class="admin-panel">
+        <h3 style="margin-bottom:12px">Все карты</h3>
+        <div id="all-cards"></div>
+      </div>
+      <button class="secondary" id="logout-admin" style="margin-top:16px">Выйти</button>
+    </div>
+  </div>
+
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
+
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyDywAw6JXoT6ZvUQjsCR-f7cQDf72RWS78",
+      authDomain: "b-bank-8801e.firebaseapp.com",
+      databaseURL: "https://b-bank-8801e-default-rtdb.firebaseio.com",
+      projectId: "b-bank-8801e",
+      storageBucket: "b-bank-8801e.firebasestorage.app",
+      messagingSenderId: "82893126784",
+      appId: "1:82893126784:web:a3dfb5932dce1dd11eba65"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+    const dataRef = db.ref("5b_bank");
+
+    // 15 карт: код → имя
+    const DEFAULT_CARDS = {
+      "1001": { name: "Айсберг",   balance: 0, history: [] },
+      "1002": { name: "Бабочка",   balance: 0, history: [] },
+      "1003": { name: "Виноград",  balance: 0, history: [] },
+      "1004": { name: "Дельфин",   balance: 0, history: [] },
+      "1005": { name: "Ёжик",      balance: 0, history: [] },
+      "1006": { name: "Жираф",     balance: 0, history: [] },
+      "1007": { name: "Зебра",     balance: 0, history: [] },
+      "1008": { name: "Ирис",      balance: 0, history: [] },
+      "1009": { name: "Крокодил",  balance: 0, history: [] },
+      "1010": { name: "Лимон",     balance: 0, history: [] },
+      "1011": { name: "Малина",    balance: 0, history: [] },
+      "1012": { name: "Носорог",   balance: 0, history: [] },
+      "1013": { name: "Одуванчик", balance: 0, history: [] },
+      "1014": { name: "Пингвин",   balance: 0, history: [] },
+      "1015": { name: "Радуга",    balance: 0, history: [] }
+    };
+
+    const ADMIN_CODE = "5555";
+    let CARDS = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+    let currentUser = null;
+
+    dataRef.on("value", (snapshot) => {
+      const data = snapshot.val();
+      if (data) {
+        CARDS = data;
+      } else {
+        dataRef.set(DEFAULT_CARDS);
+        CARDS = JSON.parse(JSON.stringify(DEFAULT_CARDS));
+      }
+      if (currentUser === "admin") showAdmin();
+      else if (currentUser) showUser();
+    });
+
+    function saveData() {
+      dataRef.set(CARDS);
+    }
+
+    function login() {
+      const code = (document.getElementById("code-input").value || "").trim();
+      const error = document.getElementById("login-error");
+
+      if (!code) {
+        error.textContent = "Введите код";
+        error.classList.remove("hidden");
+        return;
+      }
+
+      if (code === ADMIN_CODE) {
+        currentUser = "admin";
+        showAdmin();
+        return;
+      }
+
+      if (CARDS[code]) {
+        currentUser = code;
+        showUser();
+      } else {
+        error.textContent = "Неверный код";
+        error.classList.remove("hidden");
+      }
+    }
+
+    function logout() {
+      currentUser = null;
+      document.getElementById("login-screen").classList.remove("hidden");
+      document.getElementById("user-screen").classList.add("hidden");
+      document.getElementById("admin-screen").classList.add("hidden");
+      document.getElementById("code-input").value = "";
+      document.getElementById("login-error").classList.add("hidden");
+      document.getElementById("code-input").focus();
+    }
+
+    function showUser() {
+      const card = CARDS[currentUser];
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("user-screen").classList.remove("hidden");
+      document.getElementById("admin-screen").classList.add("hidden");
+
+      document.getElementById("user-name").textContent = card.name;
+      document.getElementById("balance").textContent = card.balance + " ₽";
+
+      // При переводе показываем ТОЛЬКО имена
+      const select = document.getElementById("transfer-to");
+      select.innerHTML = '<option value="">Выберите получателя</option>';
+      for (let key in CARDS) {
+        if (key === currentUser) continue;
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = CARDS[key].name;   // только имя!
+        select.appendChild(opt);
+      }
+
+      // История
+      const list = document.getElementById("history-list");
+      list.innerHTML = "";
+      if (!card.history || card.history.length === 0) {
+        list.innerHTML = "<p style='opacity:0.6;text-align:center'>Пока нет операций</p>";
+      } else {
+        card.history.slice().reverse().forEach(item => {
+          const div = document.createElement("div");
+          div.className = "history-item";
+          const isPlus = item.amount > 0;
+          div.innerHTML = `
+            <span>\( {item.date}<br><small class="small"> \){item.comment || ""}</small></span>
+            <strong style="color:\( {isPlus ? '#51cf66' : '#ff6b6b'}"> \){isPlus ? '+' : ''}${item.amount} ₽</strong>
+          `;
+          list.appendChild(div);
+        });
+      }
+    }
+
+    function showAdmin() {
+      document.getElementById("login-screen").classList.add("hidden");
+      document.getElementById("user-screen").classList.add("hidden");
+      document.getElementById("admin-screen").classList.remove("hidden");
+
+      const select = document.getElementById("admin-card");
+      select.innerHTML = '<option value="">Выберите карту</option>';
+      for (let key in CARDS) {
+        const opt = document.createElement("option");
+        opt.value = key;
+        opt.textContent = `\( {CARDS[key].name} ( \){key}) -- ${CARDS[key].balance} ₽`;
+        select.appendChild(opt);
+      }
+
+      const all = document.getElementById("all-cards");
+      all.innerHTML = "";
+      for (let key in CARDS) {
+        const div = document.createElement("div");
+        div.className = "history-item";
+        div.innerHTML = `
+          <span><strong>${CARDS[key].name}</strong><br><small class="small">код: ${key}</small></span>
+          <strong>${CARDS[key].balance} ₽</strong>
+        `;
+        all.appendChild(div);
+      }
+    }
+
+    function addMoney() {
+      const key = document.getElementById("admin-card").value;
+      const amount = parseInt(document.getElementById("admin-amount").value);
+      const comment = document.getElementById("admin-comment").value.trim() || "Пополнение от учителя";
+      const msg = document.getElementById("admin-msg");
+
+      if (!key || !amount || amount <= 0) {
+        msg.textContent = "Выберите карту и введите сумму";
+        msg.className = "error";
+        msg.classList.remove("hidden");
+        return;
+      }
+
+      CARDS[key].balance += amount;
+      if (!CARDS[key].history) CARDS[key].history = [];
+      CARDS[key].history.push({
+        amount: amount,
+        comment: comment,
+        date: new Date().toLocaleString("ru-RU")
+      });
+      saveData();
+
+      msg.textContent = `Начислено ${amount} ₽ → ${CARDS[key].name}`;
+      msg.className = "success";
+      msg.classList.remove("hidden");
+
+      document.getElementById("admin-amount").value = "";
+      document.getElementById("admin-comment").value = "";
+    }
+
+    function transferMoney() {
+      const toKey = document.getElementById("transfer-to").value;
+      const amount = parseInt(document.getElementById("transfer-amount").value);
+      const msg = document.getElementById("transfer-msg");
+
+      if (!toKey || !amount || amount <= 0) {
+        msg.textContent = "Выберите получателя и сумму";
+        msg.className = "error";
+        msg.classList.remove("hidden");
+        return;
+      }
+
+      if (CARDS[currentUser].balance < amount) {
+        msg.textContent = "Недостаточно средств";
+        msg.className = "error";
+        msg.classList.remove("hidden");
+        return;
+      }
+
+      // Списываем
+      CARDS[currentUser].balance -= amount;
+      if (!CARDS[currentUser].history) CARDS[currentUser].history = [];
+      CARDS[currentUser].history.push({
+        amount: -amount,
+        comment: `Перевод → ${CARDS[toKey].name}`,
+        date: new Date().toLocaleString("ru-RU")
+      });
+
+      // Начисляем
+      CARDS[toKey].balance += amount;
+      if (!CARDS[toKey].history) CARDS[toKey].history = [];
+      CARDS[toKey].history.push({
+        amount: amount,
+        comment: `Перевод от ${CARDS[currentUser].name}`,
+        date: new Date().toLocaleString("ru-RU")
+      });
+
+      saveData();
+
+      msg.textContent = `Переведено ${amount} ₽ → ${CARDS[toKey].name}`;
+      msg.className = "success";
+      msg.classList.remove("hidden");
+
+      document.getElementById("transfer-amount").value = "";
+      document.getElementById("transfer-to").value = "";
+    }
+
+    document.getElementById("login-btn").addEventListener("click", login);
+    document.getElementById("logout-user").addEventListener("click", logout);
+    document.getElementById("logout-admin").addEventListener("click", logout);
+    document.getElementById("add-money-btn").addEventListener("click", addMoney);
+    document.getElementById("transfer-btn").addEventListener("click", transferMoney);
+
+    document.getElementById("code-input").addEventListener("keypress", e => {
+      if (e.key === "Enter") login();
+    });
+  </script>
+</body>
+</html>
